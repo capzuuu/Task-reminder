@@ -24,8 +24,8 @@ class AlarmReceiver : BroadcastReceiver() {
                     val currentTime = System.currentTimeMillis()
                     val timeLeftMillis = task.dueTimeMillis - currentTime
 
-                    // Verified that task is due in less than an hour
-                    if (timeLeftMillis <= 3600_000 && timeLeftMillis > -600_000) { // Up to 10 mins past due
+                    // Verified that task is due in less than an hour (allowing late triggers up to 24 hours)
+                    if (timeLeftMillis <= 3660_000 && timeLeftMillis > -86400_000) { // Up to 24 hours past due or soon
                         val sdf = SimpleDateFormat("hh:mm a", Locale.getDefault())
                         val formattedTime = sdf.format(task.dueTimeMillis)
                         

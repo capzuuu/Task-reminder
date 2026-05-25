@@ -62,6 +62,18 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateTask(task: Task, title: String, description: String, dueTimeMillis: Long) {
+        viewModelScope.launch {
+            val updatedTask = task.copy(
+                title = title.ifBlank { "Untitled Task" },
+                description = description,
+                dueTimeMillis = dueTimeMillis,
+                isNotified = false // Reset notified state so they get re-notified if updated to a future time
+            )
+            repository.updateTask(updatedTask)
+        }
+    }
+
     fun addDemoTask(minutesOption: Int) {
         viewModelScope.launch {
             val title = when (minutesOption) {

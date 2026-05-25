@@ -45,6 +45,7 @@ fun TaskScreen(
     val currentTime by viewModel.currentTime.collectAsState()
     
     var showAddDialog by remember { mutableStateOf(false) }
+    var taskToEdit by remember { mutableStateOf<Task?>(null) }
     var selectedFilter by remember { mutableStateOf("All") } // "All", "Due Soon (<1h)", "Active", "Completed"
 
     // Filter tasks based on selected filter and current time
@@ -124,7 +125,8 @@ fun TaskScreen(
                 UrgentReminderBox(
                     task = urgentTask,
                     currentTime = currentTime,
-                    onToggleComplete = { viewModel.toggleTaskCompletion(urgentTask) }
+                    onToggleComplete = { viewModel.toggleTaskCompletion(urgentTask) },
+                    onEditClick = { taskToEdit = urgentTask }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -197,7 +199,8 @@ fun TaskScreen(
                                 isOverdue = isOverdue,
                                 shape = itemShape,
                                 onToggleComplete = { viewModel.toggleTaskCompletion(task) },
-                                onDelete = { viewModel.deleteTask(task) }
+                                onDelete = { viewModel.deleteTask(task) },
+                                onEditClick = { taskToEdit = task }
                             )
                         }
                     }
@@ -216,6 +219,17 @@ fun TaskScreen(
             onDemoPreset = { presetMinutes ->
                 viewModel.addDemoTask(presetMinutes)
                 showAddDialog = false
+            }
+        )
+    }
+
+    if (taskToEdit != null) {
+        EditTaskDialog(
+            task = taskToEdit!!,
+            onDismiss = { taskToEdit = null },
+            onConfirm = { title, desc, dueTime ->
+                viewModel.updateTask(taskToEdit!!, title, desc, dueTime)
+                taskToEdit = null
             }
         )
     }
@@ -333,7 +347,8 @@ fun TaskItemRow(
     isOverdue: Boolean,
     shape: androidx.compose.ui.graphics.Shape,
     onToggleComplete: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onEditClick: () -> Unit
 ) {
     val containerColor = if (task.isCompleted) {
         Color(0xFF25232A).copy(alpha = 0.5f)
@@ -381,7 +396,11 @@ fun TaskItemRow(
             Spacer(modifier = Modifier.width(16.dp))
 
             // Task Content
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onEditClick() }
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -486,7 +505,8 @@ fun TaskItemRow(
 fun UrgentReminderBox(
     task: Task,
     currentTime: Long,
-    onToggleComplete: () -> Unit
+    onToggleComplete: () -> Unit,
+    onEditClick: () -> Unit
 ) {
     val timeLeftSecs = (task.dueTimeMillis - currentTime) / 1000
     val timeLeftMins = timeLeftSecs / 60
@@ -498,6 +518,7 @@ fun UrgentReminderBox(
         shape = RoundedCornerShape(28.dp),
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onEditClick() }
             .testTag("urgent_banner"),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
@@ -1049,4 +1070,242 @@ fun EmptyStateView(filter: String, onAddClicked: () -> Unit) {
             }
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun EditTaskDialog(
+    task: Task,
+    onDismiss: () -> Unit,
+    onConfirm: (title: String, desc: String, dueTimeMillis: Long) -> Unit
+) {
+    val context = LocalContext.current
+    var title by remember { mutableStateOf(task.title) }
+    var description by remember { mutableStateOf(task.description) }
+    var selectedTime by remember { mutableStateOf(task.dueTimeMillis) }
+    var customDateTimeSelected by remember { mutableStateOf(true) }
+
+    fun showDatePicker() {
+        val currentCalendar = Calendar.getInstance().apply { timeInMillis = selectedTime }
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                currentCalendar.set(Calendar.YEAR, year)
+                currentCalendar.set(Calendar.MONTH, month)
+                currentCalendar.set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                selectedTime = currentCalendar.timeInMillis
+                customDateTimeSelected = true
+            },
+            currentCalendar.get(Calendar.YEAR),
+            currentCalendar.get(Calendar.MONTH),
+            currentCalendar.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    fun showTimePicker() {
+        val currentCalendar = Calendar.getInstance().apply { timeInMillis = selectedTime }
+        TimePickerDialog(
+            context,
+            { _, hourOfDay, minute ->
+                currentCalendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                currentCalendar.set(Calendar.MINUTE, minute)
+                selectedTime = currentCalendar.timeInMillis
+                customDateTimeSelected = true
+            },
+            currentCalendar.get(Calendar.HOUR_OF_DAY),
+            currentCalendar.get(Calendar.MINUTE),
+            false
+        ).show()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Edit Task",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Task Named") },
+                    placeholder = { Text("E.g., Turn off stove") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dialog_edit_title_input"),
+                    shape = RoundedCornerShape(10.dp)
+                )
+
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Details (Optional)") },
+                    placeholder = { Text("E.g., It will be fully simmered...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dialog_edit_desc_input"),
+                    shape = RoundedCornerShape(10.dp),
+                    maxLines = 3
+                )
+
+                Text(
+                    text = "Adjust Due Time Presets:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Button(
+                        onClick = { selectedTime = System.currentTimeMillis() + (5 * 60 * 1000L) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFFEDD5),
+                            contentColor = Color(0xFFC2410C)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .height(30.dp)
+                            .testTag("edit_preset_5m_button")
+                    ) {
+                        Text("⚡ Just 5 Mins", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = { selectedTime = System.currentTimeMillis() + (45 * 60 * 1000L) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFFEDD5),
+                            contentColor = Color(0xFFC2410C)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .height(30.dp)
+                            .testTag("edit_preset_45m_button")
+                    ) {
+                        Text("⏳ 45 Mins (<1h)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = { selectedTime = System.currentTimeMillis() + (120 * 60 * 1000L) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .height(30.dp)
+                            .testTag("edit_preset_2h_button")
+                    ) {
+                        Text("2 Hours", fontSize = 10.sp)
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                Text(
+                    text = "Or Set Custom Time & Date:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val sdfDate = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+                    val sdfTime = SimpleDateFormat("h:mm a", Locale.getDefault())
+
+                    Button(
+                        onClick = { showDatePicker() },
+                        colors = ButtonDefaults.filledTonalButtonColors(),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("edit_picker_date_button")
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = sdfDate.format(Date(selectedTime)),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = { showTimePicker() },
+                        colors = ButtonDefaults.filledTonalButtonColors(),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("edit_picker_time_button")
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = sdfTime.format(Date(selectedTime)),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+
+                val sdfFull = SimpleDateFormat("EEEE, MMM d 'at' h:mm a", Locale.getDefault())
+                Text(
+                    text = "Selected: ${sdfFull.format(Date(selectedTime))}",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(title, description, selectedTime)
+                },
+                enabled = title.isNotBlank(),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.testTag("dialog_update_button")
+            ) {
+                Text("Update Task")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag("dialog_edit_cancel_button")
+            ) {
+                Text("Cancel")
+            }
+        },
+        shape = RoundedCornerShape(24.dp)
+    )
 }

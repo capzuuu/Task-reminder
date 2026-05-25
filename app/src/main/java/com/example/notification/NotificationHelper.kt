@@ -43,7 +43,7 @@ object NotificationHelper {
         )
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_popup_reminder)
+            .setSmallIcon(com.example.R.drawable.ic_notification_bell)
             .setContentTitle("Task Due Soon!")
             .setContentText("\"$title\" is due in less than an hour: $content")
             .setPriority(NotificationCompat.PRIORITY_HIGH)

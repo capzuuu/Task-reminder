@@ -50,7 +50,21 @@ object AlarmScheduler {
         )
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val canSetExact = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                alarmManager.canScheduleExactAlarms()
+            } else {
+                true
+            }
+
+            if (canSetExact && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Log.d(TAG, "Using setExactAndAllowWhileIdle for millisecond precision")
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerTime,
+                    pendingIntent
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Log.d(TAG, "Exact alarm permission not granted, falling back to setAndAllowWhileIdle")
                 alarmManager.setAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
                     triggerTime,
@@ -65,13 +79,21 @@ object AlarmScheduler {
             }
             Log.d(TAG, "Alarm schedule succeeded for Task ID: ${task.id}")
         } catch (e: SecurityException) {
-            Log.e(TAG, "SecurityException scheduling exact alarm, attempting weak fallback", e)
+            Log.e(TAG, "SecurityException scheduling exact alarm, attempting setAndAllowWhileIdle fallback", e)
             try {
-                alarmManager.set(
-                    AlarmManager.RTC_WAKEUP,
-                    triggerTime,
-                    pendingIntent
-                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerTime,
+                        pendingIntent
+                    )
+                } else {
+                    alarmManager.set(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerTime,
+                        pendingIntent
+                    )
+                }
             } catch (ex: Exception) {
                 Log.e(TAG, "Fallback alarm scheduling also failed", ex)
             }
