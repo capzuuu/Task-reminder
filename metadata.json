@@ -1,0 +1,6 @@
+{
+  "name": "Task Reminder",
+  "description": "A clever task reminder app that alerts you when tasks are due in less than an hour.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
